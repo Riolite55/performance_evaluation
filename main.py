@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.units import inch
 import markdown2
 
@@ -69,9 +69,92 @@ def save_text_to_pdf(text, filename):
 
 
 
+def format_data(data):
+    """
+    Formats the raw form data into a markdown string.
+    """
+    timestamp = data.get('Timestamp', '')
+    email = data.get('Email address', '')
+    dme_id = data.get('DME ID - Employee Name', '')
+    
+    markdown_text = f"# Performance Evaluation Report\n\n"
+    
+    # Basic Information Table
+    markdown_text += "## Basic Information\n\n"
+    markdown_text += "<table>\n"
+    markdown_text += "<tr><th>Field</th><th>Value</th></tr>\n"
+    markdown_text += f"<tr><td>DME ID</td><td>{dme_id}</td></tr>\n"
+    markdown_text += f"<tr><td>Email</td><td>{email}</td></tr>\n"
+    markdown_text += f"<tr><td>Business Unit</td><td>{data.get('Business Unit', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Grade</td><td>{data.get('Employee Grade', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Manager</td><td>{data.get('Manager', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Manager Email</td><td>{data.get('Manager Email', '')}</td></tr>\n"
+    markdown_text += "</table>\n\n"
+    
+    # Role and Profile Information
+    markdown_text += "## Role & Technical Profile\n\n"
+    markdown_text += "<table>\n"
+    markdown_text += "<tr><th>Category</th><th>Details</th></tr>\n"
+    markdown_text += f"<tr><td>Profile</td><td>{data.get('Profile assigned on the project', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Technical Role</td><td>{data.get('Technical Role Played on the Project', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Technical Capability</td><td>{data.get('Technical Capability Utilized on the Project', '')}</td></tr>\n"
+    markdown_text += f"<tr><td>Quarter</td><td>{data.get('Evaluation filled for which quarter?', '')}</td></tr>\n"
+    markdown_text += "</table>\n\n"
+    
+    # Project Performance
+    if data.get('Project Name 3', ''):
+        markdown_text += "## Project Performance: TVTC-PMO\n\n"
+        markdown_text += "<table>\n"
+        markdown_text += "<tr><th>Evaluation Criteria</th><th>Rating</th><th>Status</th></tr>\n"
+        
+        def get_status_html(rating):
+            if rating == 'Exceeds Requirements':
+                return '<span class="status-icon status-exceeds">★ Exceeds</span>'
+            elif rating == 'Meets Requirements':
+                return '<span class="status-icon status-meets">✓ Meets</span>'
+            elif rating == 'Below Requirements':
+                return '<span class="status-icon status-below">! Below</span>'
+            return ''
+        
+        project_rating = data.get('Project/Deliverables Sign-off', '')
+        feedback_rating = data.get('Providing Resources With Timely Constructive Feedback', '')
+        
+        markdown_text += f"<tr><td>Project/Deliverables Sign-off</td><td>{project_rating}</td><td>{get_status_html(project_rating)}</td></tr>\n"
+        markdown_text += f"<tr><td>Timely Resource Feedback</td><td>{feedback_rating}</td><td>{get_status_html(feedback_rating)}</td></tr>\n"
+        markdown_text += "</table>\n\n"
+    
+    # Behavioral Competencies
+    markdown_text += "## Behavioral Competencies\n\n"
+    markdown_text += "<table>\n"
+    markdown_text += "<tr><th>Competency</th><th>Rating</th><th>Status</th></tr>\n"
+    
+    competencies = [
+        ('Devoteam Values', 'Behavioral Competencies in accordance to Devoteam Values'),
+        ('Trusted Mindset', 'Behavioral Competencies in accordance to Trusted Deavoteamer\'s Mindset'),
+        ('Knowledge & Offerings', 'Knowledge of Devoteam roles, M0 & service offerings and their application in the current assigned client environment'),
+        ('Feedback Response', 'Responsiveness to constructive feedback'),
+        ('Collaboration', 'Collaboration & effective knowledge sharing')
+    ]
+    
+    for display_name, key in competencies:
+        rating = data.get(key, '')
+        markdown_text += f"<tr><td>{display_name}</td><td>{rating}</td><td>{get_status_html(rating)}</td></tr>\n"
+    
+    markdown_text += "</table>\n\n"
+    
+    # Performance Recommendations
+    markdown_text += "## Performance Improvement Recommendations\n\n"
+    recommendations = data.get('Based on the assessment, describe how the employee can elevate their performance to deliver better outcomes and achieve greater client satisfaction during the project assignment.', '')
+    if recommendations:
+        markdown_text += f"<ul><li>{recommendations}</li></ul>\n\n"
+    
+    markdown_text += f"<p><em>Evaluation Date: {timestamp}</em></p>"
+    
+    return markdown_text
+
 def markdown_to_pdf(markdown_text: str, output_filename: str):
     """
-    Converts a Markdown string into a PDF file with rendered formatting using ReportLab.
+    Converts a Markdown string into a PDF file with rendered formatting using xhtml2pdf.
     
     Args:
         markdown_text (str): A string containing Markdown content
@@ -80,72 +163,70 @@ def markdown_to_pdf(markdown_text: str, output_filename: str):
     # Convert Markdown to HTML
     html_content = markdown2.markdown(markdown_text, extras=['tables', 'fenced-code-blocks'])
     
-    # Create the PDF document
-    doc = SimpleDocTemplate(
-        output_filename,
-        pagesize=letter,
-        rightMargin=72,
-        leftMargin=72,
-        topMargin=72,
-        bottomMargin=72
-    )
+    # Create a complete HTML document with styling
+    html_template = f"""
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                margin: 40px;
+                color: #2c3e50;
+            }}
+            h1 {{
+                font-size: 24px;
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            h2 {{
+                font-size: 18px;
+                margin-top: 20px;
+                margin-bottom: 10px;
+                color: #2c3e50;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 10px 0;
+            }}
+            th, td {{
+                border: 1px solid #dee2e6;
+                padding: 8px;
+                text-align: left;
+            }}
+            th {{
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }}
+            .status-icon {{
+                font-weight: bold;
+                font-size: 14px;
+            }}
+            .status-exceeds {{
+                color: #2ecc71;
+            }}
+            .status-meets {{
+                color: #3498db;
+            }}
+            .status-below {{
+                color: #e74c3c;
+            }}
+        </style>
+    </head>
+    <body>
+        {html_content}
+    </body>
+    </html>
+    """
     
-    # Create custom styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=30,
-        textColor=colors.HexColor('#2c3e50')
-    )
-    heading1_style = ParagraphStyle(
-        'CustomH1',
-        parent=styles['Heading1'],
-        fontSize=20,
-        spaceAfter=20,
-        textColor=colors.HexColor('#2c3e50')
-    )
-    heading2_style = ParagraphStyle(
-        'CustomH2',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=15,
-        textColor=colors.HexColor('#34495e')
-    )
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=12,
-        spaceAfter=12,
-        textColor=colors.HexColor('#2c3e50')
-    )
+    # Convert HTML to PDF using xhtml2pdf
+    from xhtml2pdf import pisa
     
-    # Split content into lines and process each line
-    story = []
-    lines = html_content.split('\n')
+    with open(output_filename, "w+b") as output_file:
+        pisa.CreatePDF(html_template, dest=output_file)
     
-    for line in lines:
-        if line.strip():
-            if line.startswith('<h1>'):
-                text = line.replace('<h1>', '').replace('</h1>', '')
-                story.append(Paragraph(text, title_style))
-            elif line.startswith('<h2>'):
-                text = line.replace('<h2>', '').replace('</h2>', '')
-                story.append(Paragraph(text, heading1_style))
-            elif line.startswith('<h3>'):
-                text = line.replace('<h3>', '').replace('</h3>', '')
-                story.append(Paragraph(text, heading2_style))
-            else:
-                # Replace some common HTML tags with their styled equivalents
-                line = line.replace('<strong>', '<b>').replace('</strong>', '</b>')
-                line = line.replace('<em>', '<i>').replace('</em>', '</i>')
-                story.append(Paragraph(line, normal_style))
-        else:
-            story.append(Spacer(1, 12))
-    
-    # Build the PDF
-    doc.build(story)
     print(f"PDF saved as {output_filename}")
 
 # Authenticate with Google Sheets
